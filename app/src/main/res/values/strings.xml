@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">JammHealthDemo</string>
+    <string name="room_url">Enter a room URL</string>
+    <string name="button_open">Open</string>
+</resources>
