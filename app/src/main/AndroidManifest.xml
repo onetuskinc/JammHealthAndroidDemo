@@ -15,7 +15,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
-        <activity android:name=".OpenRoomActivity" android:parentActivityName=".MainActivity">
+        <activity android:name=".OpenRoomActivity" android:configChanges="keyboardHidden|orientation|screenSize" android:parentActivityName=".MainActivity">
             <meta-data android:name="android.support.PARENT_ACTIVITY" android:value=".MainActivity" />
         </activity>
         <activity android:name=".MainActivity">

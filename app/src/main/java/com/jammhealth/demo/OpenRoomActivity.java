@@ -8,6 +8,7 @@ import android.Manifest;
 import android.annotation.TargetApi;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.content.res.Configuration;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
@@ -45,6 +46,12 @@ public class OpenRoomActivity extends AppCompatActivity {
         }
         // Other 'case' lines to check for other
         // permissions this app might request.
+    }
+
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        // This prevents the view being recreated when the orientation changes
+        super.onConfigurationChanged(newConfig);
     }
 
     @Override
