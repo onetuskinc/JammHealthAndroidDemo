@@ -1,7 +1,7 @@
 package com.jammhealth.demo;
 
+import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
 import android.Manifest;
@@ -12,11 +12,37 @@ import android.content.res.Configuration;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
+import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
-import android.widget.TextView;
+import android.webkit.WebViewClient;
+
+import org.json.JSONObject;
+
+
+class JSBridge {
+    AppCompatActivity activity = null;
+
+    public JSBridge(AppCompatActivity activity) {
+        this.activity = activity;
+    }
+
+    @JavascriptInterface
+    public void postMessage(String dataJson) {
+        try {
+            JSONObject data = new JSONObject(dataJson);
+            Log.d("OpenRoom", "Received Message " + data.getString("type"));
+            if (data.getString("type").equals("end")) {
+                // Finish the activity if they click the end button
+                this.activity.finish();
+            }
+        } catch(Exception e) {
+            Log.e("OpenRoom", "Failed to parse JSON message " + dataJson);
+        }
+    }
+}
 
 public class OpenRoomActivity extends AppCompatActivity {
     private final int MY_PERMISSIONS_REQUEST_CAMERA = 0;
@@ -34,7 +60,6 @@ public class OpenRoomActivity extends AppCompatActivity {
                     // in your app.
                     WebView webView = findViewById(R.id.webView);
                     webView.loadUrl(this.roomURL);
-
                 }  else {
                     // Explain to the user that the feature is unavailable because
                     // the features requires a permission that the user has denied.
@@ -54,6 +79,7 @@ public class OpenRoomActivity extends AppCompatActivity {
         super.onConfigurationChanged(newConfig);
     }
 
+    @RequiresApi(api = Build.VERSION_CODES.KITKAT)
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -64,10 +90,9 @@ public class OpenRoomActivity extends AppCompatActivity {
         String roomURL = intent.getStringExtra(MainActivity.EXTRA_MESSAGE);
         Log.v("OpenRoom", "Got room URL: " + roomURL);
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-            WebView.setWebContentsDebuggingEnabled(true);
-        }
+        WebView.setWebContentsDebuggingEnabled(true);
         WebView webView = findViewById(R.id.webView);
+        webView.addJavascriptInterface(new JSBridge(this), "JSBridge");
         WebSettings settings = webView.getSettings();
 
         settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
@@ -77,16 +102,27 @@ public class OpenRoomActivity extends AppCompatActivity {
         settings.setDomStorageEnabled(true);
         settings.setDatabaseEnabled(true);
         settings.setAppCacheEnabled(true);
-
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.KITKAT) {
-            settings.setDatabasePath("/data/data/" + webView.getContext().getPackageName() + "/databases/");
-        }
+        settings.setDatabasePath("/data/data/" + webView.getContext().getPackageName() + "/databases/");
 
         webView.setWebChromeClient(new WebChromeClient(){
             @TargetApi(Build.VERSION_CODES.LOLLIPOP)
             @Override
             public void onPermissionRequest(final PermissionRequest request) {
+                // Listen for requests to access camera and microphone and grant them
+                // may wan tot add a check to verify the domain ehre
                 request.grant(request.getResources());
+            }
+        });
+
+        webView.setWebViewClient(new WebViewClient(){
+            private boolean loaded = false;
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                // Page has finished loading, inject the javascript to forward messages to our bridge
+                if (!loaded) {
+                    view.evaluateJavascript("(function() { window.addEventListener('message', function(event) { JSBridge.postMessage(JSON.stringify(event.data)) });})();", null);
+                    loaded = true;
+                }
             }
         });
 
