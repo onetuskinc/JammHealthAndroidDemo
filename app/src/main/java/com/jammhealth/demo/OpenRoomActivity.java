@@ -34,8 +34,8 @@ class JSBridge {
         try {
             JSONObject data = new JSONObject(dataJson);
             Log.d("OpenRoom", "Received Message " + data.getString("type"));
-            if (data.getString("type").equals("end")) {
-                // Finish the activity if they click the end button
+            if (data.getString("type").equals("end") || data.getString("type").equals("disconnected")) {
+                // Finish the activity if they click the end button or disconnect
                 this.activity.finish();
             }
         } catch(Exception e) {
