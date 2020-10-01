@@ -21,9 +21,6 @@ import android.webkit.WebViewClient;
 
 import org.json.JSONObject;
 
-import static android.text.TextUtils.join;
-
-
 class JSBridge {
     AppCompatActivity activity = null;
 
@@ -113,7 +110,6 @@ public class OpenRoomActivity extends AppCompatActivity {
             public void onPermissionRequest(final PermissionRequest request) {
                 // Listen for requests to access camera and microphone and grant them
                 // may want to add a check to verify the domain here
-                Log.e("VideoChat", "onPermissionRequest: " + join(",", request.getResources()));
                 request.grant(request.getResources());
             }
         });
