@@ -21,6 +21,8 @@ import android.webkit.WebViewClient;
 
 import org.json.JSONObject;
 
+import static android.text.TextUtils.join;
+
 
 class JSBridge {
     AppCompatActivity activity = null;
@@ -103,13 +105,15 @@ public class OpenRoomActivity extends AppCompatActivity {
         settings.setDatabaseEnabled(true);
         settings.setAppCacheEnabled(true);
         settings.setDatabasePath("/data/data/" + webView.getContext().getPackageName() + "/databases/");
+        settings.setMediaPlaybackRequiresUserGesture(false);
 
         webView.setWebChromeClient(new WebChromeClient(){
             @TargetApi(Build.VERSION_CODES.LOLLIPOP)
             @Override
             public void onPermissionRequest(final PermissionRequest request) {
                 // Listen for requests to access camera and microphone and grant them
-                // may wan tot add a check to verify the domain ehre
+                // may want to add a check to verify the domain here
+                Log.e("VideoChat", "onPermissionRequest: " + join(",", request.getResources()));
                 request.grant(request.getResources());
             }
         });
