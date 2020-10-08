@@ -2,15 +2,19 @@ package com.jammhealth.demo;
 
 import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
 import android.Manifest;
 import android.annotation.TargetApi;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.content.res.AssetFileDescriptor;
 import android.content.res.Configuration;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
+import android.util.Base64;
 import android.util.Log;
 import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
@@ -20,6 +24,10 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
 import org.json.JSONObject;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.OutputStream;
 
 class JSBridge {
     AppCompatActivity activity = null;
@@ -36,6 +44,27 @@ class JSBridge {
             if (data.getString("type").equals("end") || data.getString("type").equals("disconnected")) {
                 // Finish the activity if they click the end button or disconnect
                 this.activity.finish();
+            }
+            if (data.getString("type").equals("recorded")) {
+                Log.d("OpenRoom", "Saving recorded video to external storage");
+                ActivityCompat.requestPermissions(this.activity, new String[] { Manifest.permission.WRITE_EXTERNAL_STORAGE }, 1);
+                byte[] videoBlob = Base64.decode(data.getString("videoBlob"), Base64.DEFAULT);
+                File filepath = Environment.getExternalStorageDirectory();
+                File dir = new File(filepath.getAbsolutePath() + "/cliniscape/");
+                if (!dir.exists()) {
+                    dir.mkdirs();
+                }
+
+                File newFile = new File(dir, "save_"+System.currentTimeMillis()+".webm");
+
+                if (newFile.exists()) newFile.delete();
+
+                OutputStream out = new FileOutputStream(newFile);
+
+                // Copy the bits
+                out.write(videoBlob, 0, videoBlob.length);
+                out.close();
+                Log.v("OpenRoom", "Copy file successful.");
             }
         } catch(Exception e) {
             Log.e("OpenRoom", "Failed to parse JSON message " + dataJson);
@@ -120,7 +149,7 @@ public class OpenRoomActivity extends AppCompatActivity {
             public void onPageFinished(WebView view, String url) {
                 // Page has finished loading, inject the javascript to forward messages to our bridge
                 if (!loaded) {
-                    view.evaluateJavascript("(function() { window.addEventListener('message', function(event) { JSBridge.postMessage(JSON.stringify(event.data)) });})();", null);
+                    view.evaluateJavascript("(function() { window.addEventListener('message', function(event) { if (event.data.type === 'recorded') { var reader = new window.FileReader();reader.readAsDataURL(event.data.videoBlob);reader.onloadend = () => { const base64data = reader.result;JSBridge.postMessage(JSON.stringify({ type: event.data.type, videoBlob: base64data }));}} else { JSBridge.postMessage(JSON.stringify(event.data)); }});})();", null);
                     loaded = true;
                 }
             }
