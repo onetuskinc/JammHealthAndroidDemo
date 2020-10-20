@@ -45,24 +45,34 @@ class JSBridge {
                 // Finish the activity if they click the end button or disconnect
                 this.activity.finish();
             }
-            if (data.getString("type").equals("recorded")) {
+            if (data.getString("type").equals("recorded") || data.getString("type").equals("converted")) {
                 Log.d("OpenRoom", "Saving recorded video to external storage");
                 ActivityCompat.requestPermissions(this.activity, new String[] { Manifest.permission.WRITE_EXTERNAL_STORAGE }, 1);
-                byte[] videoBlob = Base64.decode(data.getString("videoBlob"), Base64.DEFAULT);
+                byte[] mediaBlob = Base64.decode(data.getString("mediaBlob"), Base64.DEFAULT);
                 File filepath = Environment.getExternalStorageDirectory();
                 File dir = new File(filepath.getAbsolutePath() + "/cliniscape/");
                 if (!dir.exists()) {
                     dir.mkdirs();
                 }
 
-                File newFile = new File(dir, "save_"+System.currentTimeMillis()+".webm");
+                File newFile;
+                if (data.getString("mediaType").equals("video/webm")) {
+                    newFile = new File(dir, "save_" + System.currentTimeMillis() + ".webm");
+                } else if (data.getString("mediaType").equals("audio/wav")) {
+                    newFile = new File(dir, "save_" + System.currentTimeMillis() + ".wav");
+                } else if (data.getString("mediaType").equals("video/mp4")) {
+                    newFile = new File(dir, "save_" + System.currentTimeMillis() + ".mp4");
+                } else {
+                    Log.v("OpenRoom", "Unknown file type: " + data.getString("mediaType"));
+                    return;
+                }
 
                 if (newFile.exists()) newFile.delete();
 
                 OutputStream out = new FileOutputStream(newFile);
 
                 // Copy the bits
-                out.write(videoBlob, 0, videoBlob.length);
+                out.write(mediaBlob, 0, mediaBlob.length);
                 out.close();
                 Log.v("OpenRoom", "Copy file successful.");
             }
@@ -149,7 +159,7 @@ public class OpenRoomActivity extends AppCompatActivity {
             public void onPageFinished(WebView view, String url) {
                 // Page has finished loading, inject the javascript to forward messages to our bridge
                 if (!loaded) {
-                    view.evaluateJavascript("(function() { window.addEventListener('message', function(event) { if (event.data.type === 'recorded') { var reader = new window.FileReader();reader.readAsDataURL(event.data.videoBlob);reader.onloadend = () => { const base64data = reader.result;JSBridge.postMessage(JSON.stringify({ type: event.data.type, videoBlob: base64data }));}} else { JSBridge.postMessage(JSON.stringify(event.data)); }});})();", null);
+                    view.evaluateJavascript("(function() { window.addEventListener('message', function(event) { if (event.data.type === 'recorded' || event.data.type === 'converted') { var reader = new window.FileReader();reader.readAsDataURL(event.data.mediaBlob);reader.onloadend = () => { const base64data = reader.result;JSBridge.postMessage(JSON.stringify({ type: event.data.type, mediaBlob: base64data, mediaType: event.data.mediaBlob.type }));}} else { JSBridge.postMessage(JSON.stringify(event.data)); }});})();", null);
                     loaded = true;
                 }
             }
