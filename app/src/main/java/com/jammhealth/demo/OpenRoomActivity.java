@@ -9,11 +9,10 @@ import android.Manifest;
 import android.annotation.TargetApi;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.content.res.AssetFileDescriptor;
 import android.content.res.Configuration;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Environment;
 import android.util.Base64;
 import android.util.Log;
 import android.webkit.JavascriptInterface;
@@ -25,14 +24,14 @@ import android.webkit.WebViewClient;
 
 import org.json.JSONObject;
 
-import java.io.File;
-import java.io.FileOutputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.io.OutputStream;
 
 class JSBridge {
-    AppCompatActivity activity = null;
+    OpenRoomActivity activity = null;
 
-    public JSBridge(AppCompatActivity activity) {
+    public JSBridge(OpenRoomActivity activity) {
         this.activity = activity;
     }
 
@@ -49,41 +48,42 @@ class JSBridge {
                 Log.d("OpenRoom", "Saving recorded video to external storage");
                 ActivityCompat.requestPermissions(this.activity, new String[] { Manifest.permission.WRITE_EXTERNAL_STORAGE }, 1);
                 byte[] mediaBlob = Base64.decode(data.getString("mediaBlob"), Base64.DEFAULT);
-                File filepath = Environment.getExternalStorageDirectory();
-                File dir = new File(filepath.getAbsolutePath() + "/cliniscape/");
-                if (!dir.exists()) {
-                    dir.mkdirs();
+                if (mediaBlob == null || mediaBlob.length == 0) {
+                    return;
                 }
-
-                File newFile;
+                Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                intent.addCategory(Intent.CATEGORY_OPENABLE);
+                intent.setType(data.getString("mediaType"));
                 if (data.getString("mediaType").equals("video/webm")) {
-                    newFile = new File(dir, "save_" + System.currentTimeMillis() + ".webm");
+                    intent.putExtra(Intent.EXTRA_TITLE, "cliniscape-recording.webm");
                 } else if (data.getString("mediaType").equals("audio/wav")) {
-                    newFile = new File(dir, "save_" + System.currentTimeMillis() + ".wav");
+                    intent.putExtra(Intent.EXTRA_TITLE, "cliniscape-recording.wav");
                 } else if (data.getString("mediaType").equals("video/mp4")) {
-                    newFile = new File(dir, "save_" + System.currentTimeMillis() + ".mp4");
+                    intent.putExtra(Intent.EXTRA_TITLE, "cliniscape-recording.mp4");
                 } else {
                     Log.v("OpenRoom", "Unknown file type: " + data.getString("mediaType"));
                     return;
                 }
-
-                if (newFile.exists()) newFile.delete();
-
-                OutputStream out = new FileOutputStream(newFile);
-
-                // Copy the bits
-                out.write(mediaBlob, 0, mediaBlob.length);
-                out.close();
-                Log.v("OpenRoom", "Copy file successful.");
+                if (data.getString("type").equals("converted")) {
+                    this.activity.convertedBlob = mediaBlob;
+                    activity.startActivityForResult(intent, OpenRoomActivity.REQUEST_SAVE_CONVERTED_FILE);
+                } else {
+                    this.activity.mediaBlob = mediaBlob;
+                    activity.startActivityForResult(intent, OpenRoomActivity.REQUEST_SAVE_FILE);
+                }
             }
         } catch(Exception e) {
-            Log.e("OpenRoom", "Failed to parse JSON message " + dataJson);
+            Log.e("OpenRoom", "Failed to parse JSON message " + e.getMessage());
         }
     }
 }
 
 public class OpenRoomActivity extends AppCompatActivity {
     private final int MY_PERMISSIONS_REQUEST_CAMERA = 0;
+    public static final int REQUEST_SAVE_FILE = 12;
+    public static final int REQUEST_SAVE_CONVERTED_FILE = 13;
+    public byte[] mediaBlob;
+    public byte[] convertedBlob;
     private String roomURL;
 
     @Override
@@ -109,6 +109,41 @@ public class OpenRoomActivity extends AppCompatActivity {
         }
         // Other 'case' lines to check for other
         // permissions this app might request.
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (resultCode != RESULT_OK) {
+            return;
+        }
+
+        if (requestCode == REQUEST_SAVE_FILE || requestCode == REQUEST_SAVE_CONVERTED_FILE) {
+            if( data != null ) {
+                Uri uri = data.getData();
+                if( uri != null ) {
+                    try {
+                        OutputStream out = getContentResolver().openOutputStream(data.getData());
+                        byte[] blob;
+                        if (requestCode == REQUEST_SAVE_FILE) {
+                            blob = this.mediaBlob;
+                        } else {
+                            blob = this.convertedBlob;
+                        }
+                        // Copy the bits
+                        out.write(blob, 0, blob.length);
+                        out.close();
+                        Log.v("OpenRoom", "Copy file successful.");
+                    } catch (FileNotFoundException e) {
+                        Log.v("OpenRoom", "File not found");
+                        e.printStackTrace();
+                    } catch (IOException e) {
+                        Log.v("OpenRoom", "Failed to save file");
+                        e.printStackTrace();
+                    }
+                }
+            }
+        }
+        super.onActivityResult(requestCode, resultCode, data);
     }
 
     @Override
@@ -159,7 +194,7 @@ public class OpenRoomActivity extends AppCompatActivity {
             public void onPageFinished(WebView view, String url) {
                 // Page has finished loading, inject the javascript to forward messages to our bridge
                 if (!loaded) {
-                    view.evaluateJavascript("(function() { window.addEventListener('message', function(event) { if (event.data.type === 'recorded' || event.data.type === 'converted') { var reader = new window.FileReader();reader.readAsDataURL(event.data.mediaBlob);reader.onloadend = () => { const base64data = reader.result;JSBridge.postMessage(JSON.stringify({ type: event.data.type, mediaBlob: base64data, mediaType: event.data.mediaBlob.type }));}} else { JSBridge.postMessage(JSON.stringify(event.data)); }});})();", null);
+                    view.evaluateJavascript("(function() { window.addEventListener('message', function(event) { if (event.data.type === 'recorded' || event.data.type === 'converted') { var reader = new window.FileReader();reader.readAsDataURL(event.data.mediaBlob);reader.onloadend = () => { const base64data = reader.result.split(',')[1];JSBridge.postMessage(JSON.stringify({ type: event.data.type, mediaBlob: base64data, mediaType: event.data.mediaBlob.type }));}} else { JSBridge.postMessage(JSON.stringify(event.data)); }});})();", null);
                     loaded = true;
                 }
             }
